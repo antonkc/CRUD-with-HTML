@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Web SQL</title>
+</head>
+<body>
+	<style>
+		#app {
+			white-space: pre-wrap;
+		}
+		p {
+			max-width: 80ch;
+		}
+	</style>
+	<h1>How to SQL, pure HTML edition</h1>
+	<p>This file was used to explain SQL with just Chrome (Version 106.0.5249.103) as a tool. <a href="https://www.w3.org/TR/webdatabase/">Web SQL Database</a> is not a maintained especification since <time>November 18th 2010</time>. In fact, Safari and Firefox don't implement it at the time of writing this document. You can check for compatibility in <a href="https://caniuse.com/sql-storage">CanIUse</a>.</p>
+	<div id="app"></div>
+	<script>
+		let db = openDatabase('testdb', '1.0', 'Test DB', 1024 * 1024);
+		let nRead = 0;
+		function reportTransaction(){
+			console.log(...arguments);
+		}
+		function createTable(db){
+			db.transaction((tx) => {
+				tx.executeSql('CREATE TABLE IF NOT EXISTS Users (id INTEGER PRIMARY KEY AUTOINCREMENT, name, surname1, surname2, fav_color)', [], reportTransaction, console.error);
+			});
+		}
+		function dropTable(db){
+			db.transaction((tx) => {tx.executeSql('DROP TABLE Users', [], reportTransaction, console.error)});
+		}
+		// CRUD
+		function createEntry(db){// Create
+			db.transaction((tx) => {
+				const createEntrySql = 'INSERT INTO Users (name, surname1, surname2, fav_color) VALUES (?, ?, ?, ?)';
+				tx.executeSql( createEntrySql, ["Foo", "Foomirez", "Foonacio", "green"], reportTransaction, console.error);
+				tx.executeSql( createEntrySql, ["Vaa", "Vaamirez", "Vaanacio", "red"], reportTransaction, console.error);
+
+				// Be aware of SQL injections:
+				//let vals = ["Foo", "Foomirez", "Foonacio", "green);\nDROP TABLE Users;"];
+				//tx.executeSql(`INSERT INTO Users (id, name, surname1, surname2, fav_color) VALUES (${vals[0]}, ${vals[1]}, ${vals[2]}, ${vals[3]}, ${vals[4]})`); // spooky injection here (web SQL kinda prevents this, but don't ignore it in real SQL DDBB)
+				//tx.executeSql('INSERT INTO Users (id, name, surname1, surname2, fav_color) VALUES (?, ?, ?, ?, ?)', vals);
+
+			});
+		}
+		function readEntry(db){// Read
+			let appDiv = document.getElementById("app");
+			db.transaction((tx) => {
+				tx.executeSql('SELECT * FROM Users', [], (tx, result) => {
+					console.log(result);
+					if(result.rows && result.rows.length > 0)
+						appDiv.textContent += `\n\nRead [${nRead++}]:\n`+ JSON.stringify(result.rows);
+					else
+						appDiv.textContent += `\n\nRead [${nRead++}]: Empty`;
+				})
+			}, function() { // arrow function doesn't return the actual SQL error here
+				console.error(...arguments);
+				appDiv.textContent += `\n\nRead [${nRead++}]: Error - ${arguments[0].message}`;
+			});
+		}
+		function updateEntry(db){// Update
+			db.transaction((tx) => {
+				tx.executeSql('UPDATE Users SET name = ?, surname1 = ?, surname2 = ?, fav_color = ? WHERE id = ?', ["Foo2", "Foomirez", "Foonacio", "green claro", 1], reportTransaction);
+			});
+		}
+		function deleteEntry(db){// Delete
+			db.transaction((tx) => {
+				tx.executeSql('DELETE FROM Users WHERE id = ?', [1], reportTransaction, console.error);
+			});
+		}
+
+		createTable(db);
+		readEntry(db); // 0
+		createEntry(db);
+		readEntry(db); // 1
+		updateEntry(db);
+		readEntry(db); // 2
+		deleteEntry(db);
+		readEntry(db); // 3
+		dropTable(db);
+		readEntry(db); // 4
+	</script>
+</body>
+</html>
